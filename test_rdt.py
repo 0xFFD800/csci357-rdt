@@ -185,6 +185,28 @@ class A0_ErrorChecking(BaseNetworkTest):
                     self.assertEqual(host, type(self).CLIENTS[2][0])
                     self.assertEqual(port, 8383)
 
+    def test_13_accept_wait(self):
+        """Call to accept blocks when there are no incoming connections"""
+        t = ExThread(target=self.l['l'].accept)
+        t.start()
+        time.sleep(0.1)
+        self.c['a'].connect(type(self).LISTEN[0])
+        self.assertEqual(self.c['a'].rhost, (type(self).LISTEN[0]))
+
+    def test_14_connection_reset(self):
+        """Cannot connect to a non-listening socket"""
+        with self.assertRaises(RDTSocket.ConnectionReset):
+            self.c['a'].connect( (type(self).LISTEN[0][0], 9) ) # Discard port XP
+
+    def test_15_connection_timeout(self):
+        """Connection times out if server takes too long to respond"""
+        print("\n      (O)      \n   <O>0_o<O>   \n      (O)      \n       \\       \n        |      \n ||    /    || \n \\\\===(=)===// \n  \\\\#######//  \n   \\\\#####//   \n    #######    \nPatience Flower!")
+        with self.assertRaises(RDTSocket.ConnectionTimeout):
+            self.c['a'].connect(type(self).LISTEN[0])
+            t = ExThread(target=self.l['l'].accept)
+            time.sleep(6)
+            t.start()
+
 class A1_Lossless_1x1(BaseNetworkTest):
     CLIENTS = [('192.168.10.1', None), ('192.168.10.2', None)]
     LISTEN = [('192.168.10.1', 26093), ('192.168.10.2', 2531)]
@@ -303,6 +325,27 @@ class A1_Lossless_1x1(BaseNetworkTest):
             b = TOTAL - count
             ofs = count % MAX
             self.c['c'].send(data[ofs:ofs+b])
+
+    def test_08_close_conn(self) :
+        """Connections can be gracefully closed"""
+        self.makeconns({'c': (0, 1)})
+        self.c['c'].close()
+        time.sleep(0.2)
+        with self.assertRaises(StreamSocket.NotConnected):
+            self.c['c'].send(b'test-notconnected-c')
+        with self.assertRaises(StreamSocket.NotConnected):
+            self.s['c'].send(b'test-notconnected-s')
+
+    def test_09_close_conn_simultaneous(self) :
+        """Connections can be gracefully closed"""
+        self.makeconns({'c': (0, 1)})
+        self.c['c'].close()
+        self.s['c'].close()
+        time.sleep(0.2)
+        with self.assertRaises(StreamSocket.NotConnected):
+            self.c['c'].send(b'test-notconnected-c')
+        with self.assertRaises(StreamSocket.NotConnected):
+            self.s['c'].send(b'test-notconnected-s')
 
 class A2_Lossless_SameHost(A1_Lossless_1x1):
     """Runs the Lossless 1x1 tests between two sockets on a single host"""
